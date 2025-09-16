@@ -1,144 +1,121 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
-<meta charset="utf-8" />
-<title>Mapa com Modelo GLB em Veronica St</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<!-- Mapbox GL JS -->
-<link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet">
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
-
-<!-- Three.js + GLTFLoader -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/loaders/GLTFLoader.js"></script>
-
-<style>
-  html, body { margin:0; padding:0; height:100%; width:100%; }
-  #map { position:absolute; top:0; left:0; right:0; bottom:0; }
-  #controls {
-    position: absolute; top:10px; left:10px; z-index: 10;
-    background: rgba(255,255,255,0.85); padding:8px; border-radius:6px;
-  }
-  #controls button { padding:6px 10px; margin:4px 0; }
-</style>
+  <meta charset="utf-8">
+  <title>Mapa com GLB em Los Angeles</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+  </style>
 </head>
 <body>
-
 <div id="map"></div>
-<div id="controls">
-  <button id="btnReset">Resetar Vista</button>
-</div>
-
 <script>
-mapboxgl.accessToken = "pk.eyJ1IjoiYnJ1bm9wcmF4ZWRlczIxIiwiYSI6ImNtZmgzZWZjcjA3NjYyam9sZ3Jhc2Rld2sifQ.RTM-gBIflY5Y6ynbb19VFQ";
+  mapboxgl.accessToken = 'pk.eyJ1IjoiYnJ1bm9wcmF4ZWRlczIxIiwiYSI6ImNtZmgzZWZjcjA3NjYyam9sZ3Jhc2Rld2sifQ.RTM-gBIflY5Y6ynbb19VFQ';
 
-const MODEL_LNG = -118.340528;
-const MODEL_LAT = 34.009835;
-
-const map = new mapboxgl.Map({
-  container: 'map',
-  style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes',
-  center: [MODEL_LNG, MODEL_LAT],
-  zoom: 18,
-  pitch: 60,
-  bearing: -20,
-  antialias: true
-});
-
-map.addControl(new mapboxgl.NavigationControl({ showZoom:true, showCompass:true }));
-
-map.on('style.load', () => {
-  // Relevo real
-  map.addSource('mapbox-dem', {
-    type: 'raster-dem',
-    url: 'mapbox://mapbox.terrain-rgb',
-    tileSize: 512,
-    maxzoom: 14
-  });
-  map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
-
-  map.addLayer({
-    id: 'sky',
-    type: 'sky',
-    paint: {
-      'sky-type': 'atmosphere',
-      'sky-atmosphere-sun': [0.0, 0.0],
-      'sky-atmosphere-sun-intensity': 15
-    }
+  const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes',
+    center: [-118.3605, 34.0137], // Veronica St, 5245, Los Angeles
+    zoom: 17,
+    pitch: 60,
+    bearing: -20,
+    antialias: true
   });
 
-  // Coordenadas Mercator
-  const modelAltitude = 0;
-  const mercatorCoord = mapboxgl.MercatorCoordinate.fromLngLat(
-    [MODEL_LNG, MODEL_LAT],
-    modelAltitude
-  );
+  map.on('style.load', () => {
+    // Adiciona relevo real
+    map.addSource('mapbox-dem', {
+      type: 'raster-dem',
+      url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+      tileSize: 512,
+      maxzoom: 14
+    });
+    map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
 
-  const meterScale = mercatorCoord.meterInMercatorCoordinateUnits();
-  const MULTIPLICADOR_SCALE = 10000.0;  // pode ajustar se ficar muito grande ou pequeno
+    // Adiciona o céu
+    map.addLayer({
+      id: 'sky',
+      type: 'sky',
+      paint: {
+        'sky-type': 'atmosphere',
+        'sky-atmosphere-sun': [0.0, 0.0],
+        'sky-atmosphere-sun-intensity': 15
+      }
+    });
 
-  const modelTransform = {
-    translateX: mercatorCoord.x,
-    translateY: mercatorCoord.y,
-    translateZ: mercatorCoord.z,
-    scale: meterScale * MULTIPLICADOR_SCALE
-  };
+    // Adiciona o modelo GLB
+    const modelOrigin = [-118.3605, 34.0137];
+    const modelAltitude = 30;
+    const modelRotate = [Math.PI / 2, 0, 0]; // Rotação do modelo
 
-  const customLayer = {
-    id: '3d-model',
-    type: 'custom',
-    renderingMode: '3d',
-    onAdd: function (map, gl) {
-      this.camera = new THREE.Camera();
-      this.scene = new THREE.Scene();
+    const modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat(
+      modelOrigin,
+      modelAltitude
+    );
 
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(0, -70, 100).normalize();
-      this.scene.add(light);
+    const modelTransform = {
+      translateX: modelAsMercatorCoordinate.x,
+      translateY: modelAsMercatorCoordinate.y,
+      translateZ: modelAsMercatorCoordinate.z,
+      rotateX: modelRotate[0],
+      rotateY: modelRotate[1],
+      rotateZ: modelRotate[2],
+      scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 50 // Escala maior
+    };
 
-      const loader = new THREE.GLTFLoader();
-      loader.load('casa.glb',
-        (gltf) => {
-          this.model = gltf.scene;
-          this.scene.add(this.model);
-        },
-        undefined,
-        (err) => { console.error("Erro ao carregar casa.glb:", err); }
-      );
+    const customLayer = {
+      id: '3d-model',
+      type: 'custom',
+      renderingMode: '3d',
+      onAdd: function (map, gl) {
+        this.camera = new THREE.Camera();
+        this.scene = new THREE.Scene();
 
-      this.renderer = new THREE.WebGLRenderer({
-        canvas: map.getCanvas(),
-        context: gl,
-        antialias: true
-      });
-      this.renderer.autoClear = false;
-    },
-    render: function (gl, matrix) {
-      if (!this.model) return;
+        const light = new THREE.DirectionalLight(0xffffff);
+        light.position.set(0, -70, 100).normalize();
+        this.scene.add(light);
 
-      const m = new THREE.Matrix4().fromArray(matrix);
-      const l = new THREE.Matrix4()
-        .makeTranslation(modelTransform.translateX, modelTransform.translateY, modelTransform.translateZ)
-        .scale(new THREE.Vector3(modelTransform.scale, -modelTransform.scale, modelTransform.scale));
+        const loader = new THREE.GLTFLoader();
+        loader.load(
+          'casa.glb', // Arquivo deve estar na mesma pasta do index.html
+          (gltf) => {
+            this.scene.add(gltf.scene);
+            gltf.scene.scale.set(50, 50, 50); // escala adicional
+          }
+        );
 
-      this.camera.projectionMatrix = m.multiply(l);
+        this.renderer = new THREE.WebGLRenderer({
+          canvas: map.getCanvas(),
+          context: gl,
+          antialias: true
+        });
 
-      this.renderer.state.reset();
-      this.renderer.render(this.scene, this.camera);
+        this.renderer.autoClear = false;
+      },
+      render: function (gl, matrix) {
+        const m = new THREE.Matrix4().fromArray(matrix);
+        const l = new THREE.Matrix4()
+          .makeTranslation(modelTransform.translateX, modelTransform.translateY, modelTransform.translateZ)
+          .scale(new THREE.Vector3(modelTransform.scale, -modelTransform.scale, modelTransform.scale))
+          .multiply(new THREE.Matrix4().makeRotationX(modelTransform.rotateX))
+          .multiply(new THREE.Matrix4().makeRotationY(modelTransform.rotateY))
+          .multiply(new THREE.Matrix4().makeRotationZ(modelTransform.rotateZ));
 
-      map.triggerRepaint();
-    }
-  };
+        this.camera.projectionMatrix = m.multiply(l);
+        this.renderer.state.reset();
+        this.renderer.render(this.scene, this.camera);
+      }
+    };
 
-  map.addLayer(customLayer);
-});
-
-// botão resetar
-document.getElementById('btnReset').addEventListener('click', () => {
-  map.flyTo({ center: [MODEL_LNG, MODEL_LAT], zoom: 18, pitch: 60, bearing: -20 });
-});
+    map.addLayer(customLayer, 'waterway-label');
+  });
 </script>
-
+<!-- Importa Three.js e GLTFLoader -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </body>
 </html>
