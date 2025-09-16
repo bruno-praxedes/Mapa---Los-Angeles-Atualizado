@@ -16,18 +16,21 @@
 <script>
   mapboxgl.accessToken = 'pk.eyJ1IjoiYnJ1bm9wcmF4ZWRlczIxIiwiYSI6ImNtZmgzZWZjcjA3NjYyam9sZ3Jhc2Rld2sifQ.RTM-gBIflY5Y6ynbb19VFQ';
 
+  // Coordenadas do GLB (Veronica St, 5245, Los Angeles)
+  const modelCoordinates = [-118.3605, 34.0137];
+
   const map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes',
-    center: [-118.3605, 34.0137], // Veronica St, 5245, Los Angeles
-    zoom: 17,
-    pitch: 60,
-    bearing: -20,
+    center: modelCoordinates,   // <-- foca exatamente no ponto do GLB
+    zoom: 19,                   // zoom maior para aproximar
+    pitch: 65,                  // inclinação para vista em perspectiva
+    bearing: -30,               // rotação inicial
     antialias: true
   });
 
   map.on('style.load', () => {
-    // Adiciona relevo real
+    // Relevo real
     map.addSource('mapbox-dem', {
       type: 'raster-dem',
       url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
@@ -36,7 +39,7 @@
     });
     map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
 
-    // Adiciona o céu
+    // Céu
     map.addLayer({
       id: 'sky',
       type: 'sky',
@@ -47,13 +50,12 @@
       }
     });
 
-    // Adiciona o modelo GLB
-    const modelOrigin = [-118.3605, 34.0137];
+    // Configuração do GLB
     const modelAltitude = 30;
-    const modelRotate = [Math.PI / 2, 0, 0]; // Rotação do modelo
+    const modelRotate = [Math.PI / 2, 0, 0];
 
     const modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat(
-      modelOrigin,
+      modelCoordinates,
       modelAltitude
     );
 
@@ -64,7 +66,7 @@
       rotateX: modelRotate[0],
       rotateY: modelRotate[1],
       rotateZ: modelRotate[2],
-      scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 50 // Escala maior
+      scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 50
     };
 
     const customLayer = {
@@ -81,10 +83,10 @@
 
         const loader = new THREE.GLTFLoader();
         loader.load(
-          'casa.glb', // Arquivo deve estar na mesma pasta do index.html
+          'casa.glb', // precisa estar na mesma pasta que o index.html
           (gltf) => {
             this.scene.add(gltf.scene);
-            gltf.scene.scale.set(50, 50, 50); // escala adicional
+            gltf.scene.scale.set(50, 50, 50);
           }
         );
 
@@ -114,7 +116,8 @@
     map.addLayer(customLayer, 'waterway-label');
   });
 </script>
-<!-- Importa Three.js e GLTFLoader -->
+
+<!-- Three.js e GLTFLoader -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </body>
