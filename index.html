@@ -2,134 +2,98 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Mapa Interativo com GLB</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Mapa com GLB Upload</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 <link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <style>
-body { margin:0; padding:0; overflow:hidden; }
+body { margin:0; padding:0; }
 #map { position:absolute; top:0; bottom:0; width:100%; }
-#ui {
-  position:absolute; top:10px; left:10px; z-index:10; background:white; padding:10px; border-radius:5px;
+#uploadContainer {
+    position:absolute; top:10px; left:10px; z-index:10; background:white; padding:10px; border-radius:5px;
 }
-#ui input { display:block; margin-bottom:5px; }
 </style>
 </head>
 <body>
 
 <div id="map"></div>
 
-<div id="ui">
-  <input type="file" id="fileInput" accept=".glb">
-  <label>Arraste o modelo no mapa com mouse/toque</label>
-  <br>
-  <label>Escala: <input type="range" id="scaleSlider" min="1" max="200" value="50"></label>
+<!-- Campo para upload -->
+<div id="uploadContainer">
+    <input type="file" id="fileInput" accept=".glb">
 </div>
 
 <script>
 mapboxgl.accessToken = 'pk.eyJ1IjoiYnJ1bm9wcmF4ZWRlczIxIiwiYSI6ImNtZmgzZWZjcjA3NjYyam9sZ3Jhc2Rld2sifQ.RTM-gBIflY5Y6ynbb19VFQ';
 
 const map = new mapboxgl.Map({
-  container: 'map',
-  style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes',
-  center: [-118.3267, 34.0221], // posição inicial
-  zoom: 17,
-  pitch: 60,
-  bearing: -20,
-  antialias: true
+    container: 'map',
+    style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes',
+    center: [-118.3267, 34.0221], // Coordenadas iniciais
+    zoom: 17,
+    pitch: 60,
+    bearing: -20,
+    antialias: true
 });
 
+// Configurar terreno real
 map.on('style.load', () => {
-  map.addSource('mapbox-dem', {
-    type: 'raster-dem',
-    url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
-    tileSize: 512,
-    maxzoom: 14
-  });
-  map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
-
-  // camada customizada para GLB
-  const customLayer = {
-    id: '3d-model-upload',
-    type: 'custom',
-    renderingMode: '3d',
-    onAdd: function(map, gl) {
-      this.camera = new THREE.Camera();
-      this.scene = new THREE.Scene();
-      this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
-      this.renderer.autoClear = false;
-
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(0, -70, 100).normalize();
-      this.scene.add(light);
-
-      this.model = null;
-
-      // Controle de arrasto
-      this.dragging = false;
-      map.getCanvas().addEventListener('mousedown', () => { this.dragging = true; });
-      map.getCanvas().addEventListener('mouseup', () => { this.dragging = false; });
-      map.getCanvas().addEventListener('mousemove', (e) => {
-        if(this.dragging && this.model) {
-          const rect = map.getCanvas().getBoundingClientRect();
-          const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-          const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-          this.model.position.x += x * 5;
-          this.model.position.y += y * 5;
-        }
-      });
-      // Toque no celular
-      map.getCanvas().addEventListener('touchstart', () => { this.dragging = true; });
-      map.getCanvas().addEventListener('touchend', () => { this.dragging = false; });
-      map.getCanvas().addEventListener('touchmove', (e) => {
-        if(this.dragging && this.model) {
-          const touch = e.touches[0];
-          const rect = map.getCanvas().getBoundingClientRect();
-          const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-          const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-          this.model.position.x += x * 5;
-          this.model.position.y += y * 5;
-        }
-      });
-    },
-    render: function(gl, matrix) {
-      const m = new THREE.Matrix4().fromArray(matrix);
-      this.camera.projectionMatrix = m;
-      this.renderer.state.reset();
-      if(this.model) this.renderer.render(this.scene, this.camera);
-    }
-  };
-
-  map.addLayer(customLayer, 'waterway-label');
-
-  // Upload GLB
-  const fileInput = document.getElementById('fileInput');
-  fileInput.addEventListener('change', function(event) {
-    const file = event.target.files[0];
-    if(!file) return;
-    const url = URL.createObjectURL(file);
-    const loader = new THREE.GLTFLoader();
-    loader.load(url, (gltf) => {
-      if(customLayer.model) customLayer.scene.remove(customLayer.model);
-      customLayer.model = gltf.scene;
-      const scaleSlider = document.getElementById('scaleSlider');
-      const scale = scaleSlider.value / 50;
-      customLayer.model.scale.set(scale*50, scale*50, scale*50);
-      customLayer.model.position.set(0,0,0);
-      customLayer.scene.add(customLayer.model);
+    map.addSource('mapbox-dem', {
+        type: 'raster-dem',
+        url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+        tileSize: 512,
+        maxzoom: 14
     });
-  });
+    map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
 
-  // Controle de escala
-  const scaleSlider = document.getElementById('scaleSlider');
-  scaleSlider.addEventListener('input', () => {
-    if(customLayer.model) {
-      const scale = scaleSlider.value / 50;
-      customLayer.model.scale.set(scale*50, scale*50, scale*50);
-    }
-  });
+    // Configurar camada customizada
+    const customLayer = {
+        id: '3d-model-upload',
+        type: 'custom',
+        renderingMode: '3d',
+        onAdd: function(map, gl) {
+            this.camera = new THREE.Camera();
+            this.scene = new THREE.Scene();
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(0, -70, 100).normalize();
+            this.scene.add(light);
+
+            this.renderer = new THREE.WebGLRenderer({
+                canvas: map.getCanvas(),
+                context: gl,
+                antialias: true
+            });
+            this.renderer.autoClear = false;
+            this.model = null;
+        },
+        render: function(gl, matrix) {
+            const m = new THREE.Matrix4().fromArray(matrix);
+            this.camera.projectionMatrix = m;
+            this.renderer.state.reset();
+            if(this.model) this.renderer.render(this.scene, this.camera);
+        }
+    };
+
+    map.addLayer(customLayer, 'waterway-label');
+
+    // Função para ler o arquivo local e adicionar ao mapa
+    const fileInput = document.getElementById('fileInput');
+    fileInput.addEventListener('change', function(event){
+        const file = event.target.files[0];
+        if(!file) return;
+        const url = URL.createObjectURL(file);
+        const loader = new THREE.GLTFLoader();
+        loader.load(url, (gltf) => {
+            if(customLayer.model) customLayer.scene.remove(customLayer.model);
+            customLayer.model = gltf.scene;
+            // Ajuste escala e posição do modelo
+            customLayer.model.scale.set(50,50,50); // aumente ou diminua conforme necessidade
+            customLayer.model.position.set(0,0,0); // ajuste para alinhar no mapa
+            customLayer.scene.add(customLayer.model);
+        });
+    });
 });
 </script>
 </body>
