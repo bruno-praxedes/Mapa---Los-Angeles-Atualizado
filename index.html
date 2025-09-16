@@ -2,50 +2,38 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Digital Twin Interativo</title>
+<title>Mapa Digital Twin</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <style>
-body { margin:0; padding:0; overflow:hidden; }
+body { margin:0; padding:0; }
 #map { position:absolute; top:0; bottom:0; width:100%; }
-#ui {
-  position:absolute;
-  top:10px;
-  left:10px;
-  z-index:10;
-  background:white;
-  padding:10px;
-  border-radius:5px;
-  font-family:sans-serif;
-}
-#ui label { font-size:14px; margin-left:5px; }
 </style>
 </head>
 <body>
+
 <div id="map"></div>
-<div id="ui">
-  <input type="file" id="jsonInput" accept=".json">
-  <label>Escolha arquivo JSON de simulação</label>
-</div>
 
 <script>
 mapboxgl.accessToken = 'pk.eyJ1IjoiYnJ1bm9wcmF4ZWRlczIxIiwiYSI6ImNtZmgzZWZjcjA3NjYyam9sZ3Jhc2Rld2sifQ.RTM-gBIflY5Y6ynbb19VFQ';
 
 const map = new mapboxgl.Map({
   container: 'map',
-  style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes',
-  center: [-118.3267, 34.0221], // ajuste conforme a localização desejada
-  zoom: 17,
+  style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes', // seu estilo Mapbox
+  center: [-118.3267, 34.0221], // centro inicial em Los Angeles
+  zoom: 15,
   pitch: 60,
   bearing: -20,
   antialias: true
 });
 
+map.addControl(new mapboxgl.NavigationControl()); // zoom e rotação
+map.scrollZoom.enable(); // permitir zoom com scroll
+map.touchZoomRotate.enable(); // suporte ao celular
+
 map.on('style.load', () => {
-  // Ativar relevo
+  // Relevo real
   map.addSource('mapbox-dem', {
     type: 'raster-dem',
     url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
@@ -54,75 +42,17 @@ map.on('style.load', () => {
   });
   map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
 
-  // Layer customizado para objetos 3D
-  const customLayer = {
-    id: '3d-objects',
-    type: 'custom',
-    renderingMode: '3d',
-    onAdd: function(map, gl) {
-      this.camera = new THREE.Camera();
-      this.scene = new THREE.Scene();
-      this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
-      this.renderer.autoClear = false;
-
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(0, -70, 100).normalize();
-      this.scene.add(light);
-
-      this.objects = [];
-
-      const loader = new THREE.GLTFLoader();
-
-      // Carregar prédio principal
-      loader.load('https://bruno-praxedes.github.io/Predio-teste/predio.glb', (gltf) => {
-        gltf.scene.scale.set(50,50,50); // ajuste conforme necessário
-        gltf.scene.position.set(0,0,0);
-        this.scene.add(gltf.scene);
-        this.objects.push(gltf.scene);
-      });
-
-      // Carregar semáforo exemplo
-      loader.load('https://bruno-praxedes.github.io/Predio-teste/semaforo.glb', (gltf) => {
-        gltf.scene.scale.set(5,5,5); 
-        gltf.scene.position.set(10,10,0); 
-        this.scene.add(gltf.scene);
-        this.objects.push(gltf.scene);
-      });
+  // Nuvem de tráfego e clima via camadas Mapbox
+  map.addLayer({
+    id: 'traffic-layer',
+    type: 'line',
+    source: {
+      type: 'vector',
+      url: 'mapbox://mapbox.mapbox-traffic-v1'
     },
-    render: function(gl, matrix) {
-      const m = new THREE.Matrix4().fromArray(matrix);
-      this.camera.projectionMatrix = m;
-      this.renderer.state.reset();
-      this.renderer.render(this.scene, this.camera);
-    }
-  };
-
-  map.addLayer(customLayer, 'waterway-label');
-
-  // Input JSON para atualizar objetos
-  document.getElementById('jsonInput').addEventListener('change', function(e){
-    const file = e.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = function(event) {
-      const data = JSON.parse(event.target.result);
-
-      data.semaforos.forEach((s, i) => {
-        if(customLayer.objects[i]) {
-          const color = s.status === 'verde' ? 0x00ff00 : s.status === 'amarelo' ? 0xffff00 : 0xff0000;
-          customLayer.objects[i].traverse(c => { if(c.isMesh) c.material.color.setHex(color); });
-        }
-      });
-
-      data.veiculos?.forEach((v, i) => {
-        if(customLayer.objects[i+10]) {
-          customLayer.objects[i+10].position.set(v.position[0], v.position[1], 0);
-        }
-      });
-    };
-    reader.readAsText(file);
-  });
-});
-</script>
-</body>
-</html>
+    'source-layer': 'traffic',
+    paint: {
+      'line-color': ['case',
+        ['==', ['get','congestion'], 'low'], '#00FF00',
+        ['==', ['get','congestion'], 'moderate'], '#FFFF00',
+        ['==', ['get','con]()]()
