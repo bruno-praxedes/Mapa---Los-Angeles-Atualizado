@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
-<title>Mapa com relevo real + modelo GLB</title>
+<title>Mapa com Modelo GLB em Veronica St</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <!-- Mapbox GL JS -->
@@ -14,12 +14,13 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/loaders/GLTFLoader.js"></script>
 
 <style>
-  html,body { margin:0; padding:0; height:100%; }
-  #map { position:absolute; top:0; bottom:0; width:100%; }
+  html, body { margin:0; padding:0; height:100%; width:100%; }
+  #map { position:absolute; top:0; left:0; right:0; bottom:0; }
   #controls {
     position: absolute; top:10px; left:10px; z-index: 10;
-    background: rgba(255,255,255,0.8); padding:6px 10px; border-radius:6px;
+    background: rgba(255,255,255,0.85); padding:8px; border-radius:6px;
   }
+  #controls button { padding:6px 10px; margin:4px 0; }
 </style>
 </head>
 <body>
@@ -32,15 +33,14 @@
 <script>
 mapboxgl.accessToken = "pk.eyJ1IjoiYnJ1bm9wcmF4ZWRlczIxIiwiYSI6ImNtZmgzZWZjcjA3NjYyam9sZ3Jhc2Rld2sifQ.RTM-gBIflY5Y6ynbb19VFQ";
 
-const MODEL_LNG = -118.3605277778; // Los Angeles
-const MODEL_LAT = 34.01375;
+const MODEL_LNG = -118.340528;
+const MODEL_LAT = 34.009835;
 
-// Inicia mapa
 const map = new mapboxgl.Map({
   container: 'map',
-  style: 'mapbox://styles/mapbox/standard',
+  style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes',
   center: [MODEL_LNG, MODEL_LAT],
-  zoom: 16,
+  zoom: 18,
   pitch: 60,
   bearing: -20,
   antialias: true
@@ -49,37 +49,34 @@ const map = new mapboxgl.Map({
 map.addControl(new mapboxgl.NavigationControl({ showZoom:true, showCompass:true }));
 
 map.on('style.load', () => {
-  // Ativar relevo real
+  // Relevo real
   map.addSource('mapbox-dem', {
-    "type": "raster-dem",
-    "url": "mapbox://mapbox.terrain-rgb",
-    "tileSize": 512,
-    "maxzoom": 14
+    type: 'raster-dem',
+    url: 'mapbox://mapbox.terrain-rgb',
+    tileSize: 512,
+    maxzoom: 14
   });
-  map.setTerrain({ "source": "mapbox-dem", "exaggeration": 1.2 });
+  map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
 
-  // Céu (atmosfera realista)
   map.addLayer({
-    "id": "sky",
-    "type": "sky",
-    "paint": {
-      "sky-type": "atmosphere",
-      "sky-atmosphere-sun": [0.0, 0.0],
-      "sky-atmosphere-sun-intensity": 15
+    id: 'sky',
+    type: 'sky',
+    paint: {
+      'sky-type': 'atmosphere',
+      'sky-atmosphere-sun': [0.0, 0.0],
+      'sky-atmosphere-sun-intensity': 15
     }
   });
 
-  /* === Adicionar GLB === */
-  const modelAltitude = 0; // em metros
+  // Coordenadas Mercator
+  const modelAltitude = 0;
   const mercatorCoord = mapboxgl.MercatorCoordinate.fromLngLat(
     [MODEL_LNG, MODEL_LAT],
     modelAltitude
   );
 
   const meterScale = mercatorCoord.meterInMercatorCoordinateUnits();
-
-  // Aumentei bastante o multiplicador (ajuste se necessário)
-  const MULTIPLICADOR_SCALE = 500.0;
+  const MULTIPLICADOR_SCALE = 10000.0;  // pode ajustar se ficar muito grande ou pequeno
 
   const modelTransform = {
     translateX: mercatorCoord.x,
@@ -101,8 +98,7 @@ map.on('style.load', () => {
       this.scene.add(light);
 
       const loader = new THREE.GLTFLoader();
-      loader.load(
-        'casa.glb', // coloque o arquivo no mesmo diretório do index.html
+      loader.load('casa.glb',
         (gltf) => {
           this.model = gltf.scene;
           this.scene.add(this.model);
@@ -130,6 +126,7 @@ map.on('style.load', () => {
 
       this.renderer.state.reset();
       this.renderer.render(this.scene, this.camera);
+
       map.triggerRepaint();
     }
   };
@@ -137,12 +134,11 @@ map.on('style.load', () => {
   map.addLayer(customLayer);
 });
 
-// Resetar câmera
+// botão resetar
 document.getElementById('btnReset').addEventListener('click', () => {
-  map.flyTo({ center: [MODEL_LNG, MODEL_LAT], zoom: 16, pitch: 60, bearing: -20 });
+  map.flyTo({ center: [MODEL_LNG, MODEL_LAT], zoom: 18, pitch: 60, bearing: -20 });
 });
 </script>
 
 </body>
 </html>
-
