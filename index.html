@@ -2,118 +2,115 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
-<title>Mapa + Modelo GLB na posição real</title>
+<title>Mapa com relevo real + modelo GLB</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <!-- Mapbox GL JS -->
 <link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
 
-<!-- Three.js (não-module) e GLTFLoader -->
+<!-- Three.js + GLTFLoader -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/loaders/GLTFLoader.js"></script>
 
 <style>
-  html,body { height:100%; margin:0; padding:0; }
-  #map { position:absolute; top:0; left:0; right:0; bottom:0; }
+  html,body { margin:0; padding:0; height:100%; }
+  #map { position:absolute; top:0; bottom:0; width:100%; }
   #controls {
     position: absolute; top:10px; left:10px; z-index: 10;
-    background: rgba(255,255,255,0.85); padding:8px; border-radius:6px;
+    background: rgba(255,255,255,0.8); padding:6px 10px; border-radius:6px;
   }
-  #controls button { padding:6px 10px; margin:4px 0; }
 </style>
 </head>
 <body>
 
 <div id="map"></div>
 <div id="controls">
-  <button id="btnRefresh">Resetar Vista</button>
+  <button id="btnReset">Resetar Vista</button>
 </div>
 
 <script>
-/* ===== CONFIGURAÇÃO MAPBOX ===== */
 mapboxgl.accessToken = "pk.eyJ1IjoiYnJ1bm9wcmF4ZWRlczIxIiwiYSI6ImNtZmgzZWZjcjA3NjYyam9sZ3Jhc2Rld2sifQ.RTM-gBIflY5Y6ynbb19VFQ";
 
-/* coordenadas em decimal para o ponto que você passou */
-const MODEL_LNG = -118.3605277778;
+const MODEL_LNG = -118.3605277778; // Los Angeles
 const MODEL_LAT = 34.01375;
 
-/* inicializa o mapa (centro próximo ao modelo, zoom alto para ver o objeto) */
+// Inicia mapa
 const map = new mapboxgl.Map({
   container: 'map',
-  style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes',
+  style: 'mapbox://styles/mapbox/standard',
   center: [MODEL_LNG, MODEL_LAT],
-  zoom: 18,      // aprox. nível de rua; ajuste se necessário
+  zoom: 16,
   pitch: 60,
-  bearing: -17,
+  bearing: -20,
   antialias: true
 });
 
-map.addControl(new mapboxgl.NavigationControl({ showCompass:true, showZoom:true }), 'top-right');
-map.touchZoomRotate.enableRotation();
-
-/* ===== ADICIONAR MODELO GLB NA POSIÇÃO GEOGRÁFICA =====
-   - coloque 'casa.glb' na mesma pasta que este index.html no repositório
-   - se o GLB estiver em subpasta, ajuste o caminho em loader.load('sub/xxx.glb')
-*/
+map.addControl(new mapboxgl.NavigationControl({ showZoom:true, showCompass:true }));
 
 map.on('style.load', () => {
-  // altitude em metros acima do nível do mar onde quer que o modelo fique (0 = solo)
-  const modelAltitude = 0;
+  // Ativar relevo real
+  map.addSource('mapbox-dem', {
+    "type": "raster-dem",
+    "url": "mapbox://mapbox.terrain-rgb",
+    "tileSize": 512,
+    "maxzoom": 14
+  });
+  map.setTerrain({ "source": "mapbox-dem", "exaggeration": 1.2 });
 
-  // converte lon/lat para coordenadas Mercator do Mapbox (necessárias para posicionar o THREE.js)
-  const mercatorCoord = mapboxgl.MercatorCoordinate.fromLngLat([MODEL_LNG, MODEL_LAT], modelAltitude);
+  // Céu (atmosfera realista)
+  map.addLayer({
+    "id": "sky",
+    "type": "sky",
+    "paint": {
+      "sky-type": "atmosphere",
+      "sky-atmosphere-sun": [0.0, 0.0],
+      "sky-atmosphere-sun-intensity": 15
+    }
+  });
 
-  // escala (unidade: metros em unidades Mercator)
-  const MODEL_SCALE_METERS = mercatorCoord.meterInMercatorCoordinateUnits();
+  /* === Adicionar GLB === */
+  const modelAltitude = 0; // em metros
+  const mercatorCoord = mapboxgl.MercatorCoordinate.fromLngLat(
+    [MODEL_LNG, MODEL_LAT],
+    modelAltitude
+  );
 
-  // Se seu modelo GLB está em unidades "metros", o valor acima geralmente funciona.
-  // Caso o modelo fique gigantesco ou muito pequeno, ajuste MULTIPLICADOR_SCALE abaixo (ex: 0.2, 2, 10)
-  const MULTIPLICADOR_SCALE = 1.0;
+  const meterScale = mercatorCoord.meterInMercatorCoordinateUnits();
+
+  // Aumentei bastante o multiplicador (ajuste se necessário)
+  const MULTIPLICADOR_SCALE = 50.0;
 
   const modelTransform = {
     translateX: mercatorCoord.x,
     translateY: mercatorCoord.y,
     translateZ: mercatorCoord.z,
-    scale: MODEL_SCALE_METERS * MULTIPLICADOR_SCALE
+    scale: meterScale * MULTIPLICADOR_SCALE
   };
 
-  // Custom layer para renderizar com THREE.js
   const customLayer = {
-    id: '3d-model-layer',
+    id: '3d-model',
     type: 'custom',
     renderingMode: '3d',
-
-    onAdd: function(map, gl) {
+    onAdd: function (map, gl) {
       this.camera = new THREE.Camera();
       this.scene = new THREE.Scene();
 
-      // luz simples
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-      dirLight.position.set(0, -70, 100).normalize();
-      this.scene.add(dirLight);
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(0, -70, 100).normalize();
+      this.scene.add(light);
 
-      // GLTF loader
       const loader = new THREE.GLTFLoader();
-
-      // Carrega o arquivo GLB (mude o nome se preciso). O arquivo deve estar disponível no mesmo diretório que index.html
-      loader.load('casa.glb',
+      loader.load(
+        'casa.glb', // coloque o arquivo no mesmo diretório do index.html
         (gltf) => {
           this.model = gltf.scene;
-
-          // opcional: se quiser ajustar origem do modelo, use this.model.position.set(...)
-          // A transformação final será aplicada no render() multiplicando com modelTransform.matrix
-
-          // Adiciona o modelo à cena
           this.scene.add(this.model);
         },
         undefined,
-        (err) => {
-          console.error('Erro ao carregar casa.glb:', err);
-        }
+        (err) => { console.error("Erro ao carregar casa.glb:", err); }
       );
 
-      // renderer usando o contexto WebGL do Mapbox
       this.renderer = new THREE.WebGLRenderer({
         canvas: map.getCanvas(),
         context: gl,
@@ -121,40 +118,28 @@ map.on('style.load', () => {
       });
       this.renderer.autoClear = false;
     },
+    render: function (gl, matrix) {
+      if (!this.model) return;
 
-    render: function(gl, matrix) {
-      if (!this.model) {
-        // modelo ainda não carregou
-        return;
-      }
-
-      // matrix de projeção da câmera do Mapbox
       const m = new THREE.Matrix4().fromArray(matrix);
-
-      // transformação de posição/escala para colocar o modelo na coordenada Mercator correta
       const l = new THREE.Matrix4()
         .makeTranslation(modelTransform.translateX, modelTransform.translateY, modelTransform.translateZ)
-        .scale(new THREE.Vector3(modelTransform.scale, -modelTransform.scale, modelTransform.scale)); // note o -scale em Y para alinhar eixo
+        .scale(new THREE.Vector3(modelTransform.scale, -modelTransform.scale, modelTransform.scale));
 
-      // aplicar
       this.camera.projectionMatrix = m.multiply(l);
 
-      // render
       this.renderer.state.reset();
       this.renderer.render(this.scene, this.camera);
-
-      // pedir novo frame se necessário
       map.triggerRepaint();
     }
   };
 
-  // adiciona a camada
   map.addLayer(customLayer);
 });
 
-/* Botão de resetar vista */
-document.getElementById('btnRefresh').addEventListener('click', () => {
-  map.flyTo({ center: [MODEL_LNG, MODEL_LAT], zoom: 18, pitch: 60, bearing: -17 });
+// Resetar câmera
+document.getElementById('btnReset').addEventListener('click', () => {
+  map.flyTo({ center: [MODEL_LNG, MODEL_LAT], zoom: 16, pitch: 60, bearing: -20 });
 });
 </script>
 
