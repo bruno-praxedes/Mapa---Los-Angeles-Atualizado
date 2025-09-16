@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Mapa 3D Los Angeles com Tráfego, Clima e Orbit Press</title>
+<title>Mapa 3D Los Angeles com Tráfego, Clima e Orbit</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 
 <!-- Mapbox GL JS -->
@@ -10,17 +10,14 @@
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
 
 <style>
-  html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; font-family:sans-serif; }
+  html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; }
   #map { position:absolute; top:0; left:0; width:100%; height:100%; z-index:0; }
   #controls {
     position:absolute; top:10px; left:10px;
     background: rgba(255,255,255,0.8); padding:10px; border-radius:6px;
     z-index:10; display:flex; flex-direction:column; gap:8px;
   }
-  #controls button {
-    padding:8px 16px; font-size:14px; cursor:pointer; border:1px solid #888; border-radius:4px; background:#fff;
-    transition: background 0.2s;
-  }
+  #controls button { padding:8px 16px; font-size:14px; cursor:pointer; border:1px solid #888; border-radius:4px; background:#fff; }
   #controls button:hover { background:#f0f0f0; }
   @media (max-width:600px){
     #controls { top:5px; left:5px; padding:6px; gap:6px; }
@@ -55,19 +52,8 @@ const map = new mapboxgl.Map({
 map.addControl(new mapboxgl.NavigationControl({ showCompass:true, showZoom:true }), 'top-right');
 map.touchZoomRotate.enableRotation();
 
-// Relevo real e tráfego
+// Camada de tráfego
 map.on('load', () => {
-
-  // Relevo real
-  map.addSource('mapbox-dem', {
-    type: 'raster-dem',
-    url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
-    tileSize: 512,
-    maxzoom: 14
-  });
-  map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
-
-  // Tráfego
   map.addSource('traffic', {
     type: 'vector',
     url: 'mapbox://mapbox.mapbox-traffic-v1'
@@ -93,20 +79,43 @@ map.on('load', () => {
     }
   });
 
-  // Clima (camada de nuvens) via OpenWeatherMap
-  map.addLayer({
-    id: 'clouds',
-    type: 'raster',
-    source: {
-      type: 'raster',
-      tiles: [
-        'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=049661e65fca422ff38e37e43ec0c67d'
-      ],
-      tileSize: 256
-    },
-    paint: { 'raster-opacity': 0.5 }
-  });
+  // API de clima - nuvens e chuva
+  fetch('https://api.weatherapi.com/v1/current.json?key=zpka_73601477e5654df5a4c388da4183b5b6_5a2b7f5a&q=34.0313,-118.3241&aqi=no')
+    .then(res => res.json())
+    .then(data => {
+      const clima = data.current.condition.text.toLowerCase();
+      if(clima.includes('rain') || clima.includes('storm')){
+        addRain();
+      } else if(clima.includes('cloud')){
+        addClouds();
+      }
+    });
 
+  function addRain(){
+    const rainDiv = document.createElement('div');
+    rainDiv.style.position = 'absolute';
+    rainDiv.style.top = '0';
+    rainDiv.style.left = '0';
+    rainDiv.style.width = '100%';
+    rainDiv.style.height = '100%';
+    rainDiv.style.pointerEvents = 'none';
+    rainDiv.style.background = 'url(https://i.ibb.co/LvW8Z6K/rain.gif) repeat';
+    rainDiv.style.opacity = '0.5';
+    document.body.appendChild(rainDiv);
+  }
+
+  function addClouds(){
+    const cloudDiv = document.createElement('div');
+    cloudDiv.style.position = 'absolute';
+    cloudDiv.style.top = '0';
+    cloudDiv.style.left = '0';
+    cloudDiv.style.width = '100%';
+    cloudDiv.style.height = '100%';
+    cloudDiv.style.pointerEvents = 'none';
+    cloudDiv.style.background = 'url(https://i.ibb.co/mNqH9rM/clouds.png) repeat';
+    cloudDiv.style.opacity = '0.4';
+    document.body.appendChild(cloudDiv);
+  }
 });
 
 // Botão Atualizar
@@ -117,57 +126,29 @@ document.getElementById("btnRefresh").addEventListener("click", () => {
   map.setBearing(-17.6);
 });
 
-// ===== Orbit com pressionamento e arraste =====
+// ===== Orbit =====
 let orbitActive = false;
 let lastMouse = null;
-
 const orbitButton = document.getElementById("btnOrbit");
 
-function startOrbit(e){
-  orbitActive = true;
-  if(e.type.startsWith('touch')){
-    lastMouse = e.touches[0];
-  } else {
-    lastMouse = e;
-  }
-}
-
-function stopOrbit(){
-  orbitActive = false;
-  lastMouse = null;
-}
-
+function startOrbit(e){ orbitActive=true; lastMouse=e.touches?e.touches[0]:e; }
+function stopOrbit(){ orbitActive=false; lastMouse=null; }
 function moveCamera(e){
   if(!orbitActive) return;
-
-  let currentMouse;
-  if(e.type.startsWith('touch')){
-    currentMouse = e.touches[0];
-  } else {
-    currentMouse = e;
-  }
-
-  const deltaX = currentMouse.clientX - lastMouse.clientX;
-  const deltaY = currentMouse.clientY - lastMouse.clientY;
-
-  // Ajuste da câmera
-  const bearing = map.getBearing() + deltaX * 0.1;
-  let pitch = map.getPitch() - deltaY * 0.1;
+  let current = e.touches?e.touches[0]:e;
+  const deltaX = current.clientX - lastMouse.clientX;
+  const deltaY = current.clientY - lastMouse.clientY;
+  const bearing = map.getBearing() + deltaX*0.1;
+  let pitch = map.getPitch() - deltaY*0.1;
   pitch = Math.max(0, Math.min(85, pitch));
-
   map.setBearing(bearing);
   map.setPitch(pitch);
-
-  lastMouse = currentMouse;
+  lastMouse = current;
 }
-
-// Eventos do botão
 orbitButton.addEventListener('mousedown', startOrbit);
 orbitButton.addEventListener('touchstart', startOrbit);
-
 document.addEventListener('mouseup', stopOrbit);
 document.addEventListener('touchend', stopOrbit);
-
 document.addEventListener('mousemove', moveCamera);
 document.addEventListener('touchmove', moveCamera);
 </script>
