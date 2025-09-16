@@ -1,58 +1,150 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Mapa Digital Twin</title>
+<title>Mapa 3D Los Angeles com Tráfego e Orbit Press</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<!-- Mapbox GL JS -->
 <link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
+
 <style>
-body { margin:0; padding:0; }
-#map { position:absolute; top:0; bottom:0; width:100%; }
+  html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; font-family:sans-serif; }
+  #map { position:absolute; top:0; left:0; width:100%; height:100%; z-index:0; }
+  #controls {
+    position:absolute; top:10px; left:10px;
+    background: rgba(255,255,255,0.8); padding:10px; border-radius:6px;
+    z-index:10; display:flex; flex-direction:column; gap:8px;
+  }
+  #controls button {
+    padding:8px 16px; font-size:14px; cursor:pointer; border:1px solid #888; border-radius:4px; background:#fff;
+    transition: background 0.2s;
+  }
+  #controls button:hover { background:#f0f0f0; }
+  @media (max-width:600px){
+    #controls { top:5px; left:5px; padding:6px; gap:6px; }
+    #controls button { padding:6px 12px; font-size:12px; }
+  }
 </style>
 </head>
 <body>
 
 <div id="map"></div>
 
+<div id="controls">
+  <button id="btnRefresh">Atualizar Mapa</button>
+  <button id="btnOrbit">Orbit 3D (Pressione e arraste)</button>
+</div>
+
 <script>
 mapboxgl.accessToken = 'pk.eyJ1IjoiYnJ1bm9wcmF4ZWRlczIxIiwiYSI6ImNtZmgzZWZjcjA3NjYyam9sZ3Jhc2Rld2sifQ.RTM-gBIflY5Y6ynbb19VFQ';
 
 const map = new mapboxgl.Map({
   container: 'map',
-  style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes', // seu estilo Mapbox
-  center: [-118.3267, 34.0221], // centro inicial em Los Angeles
-  zoom: 15,
+  style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes', 
+  center: [-118.3241, 34.0313],
+  zoom: 14,
   pitch: 60,
-  bearing: -20,
+  bearing: -17.6,
+  projection: 'mercator',
   antialias: true
 });
 
-map.addControl(new mapboxgl.NavigationControl()); // zoom e rotação
-map.scrollZoom.enable(); // permitir zoom com scroll
-map.touchZoomRotate.enable(); // suporte ao celular
+// Controles de navegação
+map.addControl(new mapboxgl.NavigationControl({ showCompass:true, showZoom:true }), 'top-right');
+map.touchZoomRotate.enableRotation();
 
-map.on('style.load', () => {
-  // Relevo real
-  map.addSource('mapbox-dem', {
-    type: 'raster-dem',
-    url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
-    tileSize: 512,
-    maxzoom: 14
+// Camada de tráfego
+map.on('load', () => {
+  map.addSource('traffic', {
+    type: 'vector',
+    url: 'mapbox://mapbox.mapbox-traffic-v1'
   });
-  map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
 
-  // Nuvem de tráfego e clima via camadas Mapbox
   map.addLayer({
-    id: 'traffic-layer',
+    id: 'traffic-flow',
     type: 'line',
-    source: {
-      type: 'vector',
-      url: 'mapbox://mapbox.mapbox-traffic-v1'
-    },
+    source: 'traffic',
     'source-layer': 'traffic',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
     paint: {
-      'line-color': ['case',
-        ['==', ['get','congestion'], 'low'], '#00FF00',
-        ['==', ['get','congestion'], 'moderate'], '#FFFF00',
-        ['==', ['get','con]()]()
+      'line-color': [
+        'match',
+        ['get', 'congestion'],
+        ['low'], '#00FF00',
+        ['moderate'], '#FFFF00',
+        ['heavy'], '#FF0000',
+        ['severe'], '#8B0000',
+        '#00FF00'
+      ],
+      'line-width': 3
+    }
+  });
+});
+
+// Botão Atualizar
+document.getElementById("btnRefresh").addEventListener("click", () => {
+  map.setCenter([-118.3241, 34.0313]);
+  map.setZoom(14);
+  map.setPitch(60);
+  map.setBearing(-17.6);
+});
+
+// ===== Orbit com pressionamento e arraste =====
+let orbitActive = false;
+let lastMouse = null;
+
+const orbitButton = document.getElementById("btnOrbit");
+
+function startOrbit(e){
+  orbitActive = true;
+  if(e.type.startsWith('touch')){
+    lastMouse = e.touches[0];
+  } else {
+    lastMouse = e;
+  }
+}
+
+function stopOrbit(){
+  orbitActive = false;
+  lastMouse = null;
+}
+
+function moveCamera(e){
+  if(!orbitActive) return;
+
+  let currentMouse;
+  if(e.type.startsWith('touch')){
+    currentMouse = e.touches[0];
+  } else {
+    currentMouse = e;
+  }
+
+  const deltaX = currentMouse.clientX - lastMouse.clientX;
+  const deltaY = currentMouse.clientY - lastMouse.clientY;
+
+  // Ajuste da câmera
+  const bearing = map.getBearing() + deltaX * 0.1; // rotação horizontal
+  let pitch = map.getPitch() - deltaY * 0.1;      // inclinação vertical
+  pitch = Math.max(0, Math.min(85, pitch));       // limita o pitch para 0-85°
+
+  map.setBearing(bearing);
+  map.setPitch(pitch);
+
+  lastMouse = currentMouse;
+}
+
+// Eventos do botão
+orbitButton.addEventListener('mousedown', startOrbit);
+orbitButton.addEventListener('touchstart', startOrbit);
+
+document.addEventListener('mouseup', stopOrbit);
+document.addEventListener('touchend', stopOrbit);
+
+document.addEventListener('mousemove', moveCamera);
+document.addEventListener('touchmove', moveCamera);
+</script>
+
+</body>
+</html>
