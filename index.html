@@ -79,7 +79,7 @@ map.on('style.load', () => {
   const meterScale = mercatorCoord.meterInMercatorCoordinateUnits();
 
   // Aumentei bastante o multiplicador (ajuste se necessário)
-  const MULTIPLICADOR_SCALE = 50.0;
+  const MULTIPLICADOR_SCALE = 500.0;
 
   const modelTransform = {
     translateX: mercatorCoord.x,
@@ -145,3 +145,4 @@ document.getElementById('btnReset').addEventListener('click', () => {
 
 </body>
 </html>
+
