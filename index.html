@@ -32,12 +32,12 @@ body { margin:0; padding:0; overflow:hidden; }
 </div>
 
 <script>
-mapboxgl.accessToken = 'SEU_MAPBOX_TOKEN_AQUI';
+mapboxgl.accessToken = 'pk.eyJ1IjoiYnJ1bm9wcmF4ZWRlczIxIiwiYSI6ImNtZmgzZWZjcjA3NjYyam9sZ3Jhc2Rld2sifQ.RTM-gBIflY5Y6ynbb19VFQ';
 
 const map = new mapboxgl.Map({
   container: 'map',
   style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes',
-  center: [-118.3267, 34.0221], // Centro do mapa (ajuste conforme necessário)
+  center: [-118.3267, 34.0221], // ajuste conforme a localização desejada
   zoom: 17,
   pitch: 60,
   bearing: -20,
@@ -74,17 +74,17 @@ map.on('style.load', () => {
       const loader = new THREE.GLTFLoader();
 
       // Carregar prédio principal
-      loader.load('https://SEU_USUARIO.github.io/SEU_REPOSITORIO/predio.glb', (gltf) => {
-        gltf.scene.scale.set(50,50,50);
+      loader.load('https://bruno-praxedes.github.io/Predio-teste/predio.glb', (gltf) => {
+        gltf.scene.scale.set(50,50,50); // ajuste conforme necessário
         gltf.scene.position.set(0,0,0);
         this.scene.add(gltf.scene);
         this.objects.push(gltf.scene);
       });
 
       // Carregar semáforo exemplo
-      loader.load('https://SEU_USUARIO.github.io/SEU_REPOSITORIO/semaforo.glb', (gltf) => {
-        gltf.scene.scale.set(5,5,5);
-        gltf.scene.position.set(10,10,0); // ajuste posição
+      loader.load('https://bruno-praxedes.github.io/Predio-teste/semaforo.glb', (gltf) => {
+        gltf.scene.scale.set(5,5,5); 
+        gltf.scene.position.set(10,10,0); 
         this.scene.add(gltf.scene);
         this.objects.push(gltf.scene);
       });
@@ -114,9 +114,8 @@ map.on('style.load', () => {
         }
       });
 
-      // Exemplo de atualizar posição de veículos (se houver)
       data.veiculos?.forEach((v, i) => {
-        if(customLayer.objects[i+10]) { // assumindo objetos extras para veículos
+        if(customLayer.objects[i+10]) {
           customLayer.objects[i+10].position.set(v.position[0], v.position[1], 0);
         }
       });
