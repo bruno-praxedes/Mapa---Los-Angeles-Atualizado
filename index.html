@@ -1,198 +1,136 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Mapa com GLB editável</title>
-  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
-  <link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet">
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
-  <style>
-    body { margin: 0; padding: 0; }
-    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
-    #controls, #fileInput {
-      position: absolute;
-      z-index: 999;
-      background: white;
-      padding: 10px;
-      border-radius: 8px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-    }
-    #fileInput { top: 10px; left: 10px; }
-    #controls { top: 70px; left: 10px; width: 220px; }
-    #controls label { display: block; margin-top: 5px; }
-    #info {
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
-      background: rgba(0,0,0,0.6);
-      color: white;
-      padding: 5px;
-      font-size: 13px;
-      border-radius: 5px;
-      font-family: Arial, sans-serif;
-    }
-  </style>
-</head>
-<body>
-<input type="file" id="fileInput" accept=".glb,.gltf" />
-
-<div id="controls" style="display:none;">
-  <strong>Editar modelo</strong><br>
-  <label>Movimento X: <input type="range" id="posX" min="-100" max="100" value="0"></label>
-  <label>Movimento Y: <input type="range" id="posY" min="-100" max="100" value="0"></label>
-  <label>Movimento Z: <input type="range" id="posZ" min="-50" max="50" value="0"></label>
-  <label>Rotação: <input type="range" id="rotZ" min="0" max="360" value="0"></label>
-  <label>Escala: <input type="range" id="scale" min="1" max="200" value="50"></label>
-</div>
-
-<div id="map"></div>
-<div id="info">📌 Carregue um GLB → clique no mapa → edite o modelo</div>
-
+<meta charset="utf-8">
+<title>Mapa Interativo com GLB</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<style>
+body { margin:0; padding:0; overflow:hidden; }
+#map { position:absolute; top:0; bottom:0; width:100%; }
+#ui {
+  position:absolute; top:10px; left:10px; z-index:10; background:white; padding:10px; border-radius:5px;
+}
+#ui input { display:block; margin-bottom:5px; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="ui">
+  <input type="file" id="fileInput" accept=".glb">
+  <label>Arraste o modelo no mapa com mouse/toque</label>
+  <br>
+  <label>Escala: <input type="range" id="scaleSlider" min="1" max="200" value="50"></label>
+</div>
 
 <script>
-  mapboxgl.accessToken = 'pk.eyJ1IjoiYnJ1bm9wcmF4ZWRlczIxIiwiYSI6ImNtZmgzZWZjcjA3NjYyam9sZ3Jhc2Rld2sifQ.RTM-gBIflY5Y6ynbb19VFQ';
+mapboxgl.accessToken = 'pk.eyJ1IjoiYnJ1bm9wcmF4ZWRlczIxIiwiYSI6ImNtZmgzZWZjcjA3NjYyam9sZ3Jhc2Rld2sifQ.RTM-gBIflY5Y6ynbb19VFQ';
 
-  let customLayer = null;
-  let glbData = null;
-  let modelTransform = null;
-  let gltfScene = null;
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes',
+  center: [-118.3267, 34.0221], // posição inicial
+  zoom: 17,
+  pitch: 60,
+  bearing: -20,
+  antialias: true
+});
 
-  const map = new mapboxgl.Map({
-    container: 'map',
-    style: 'mapbox://styles/brunopraxedes21/cmfhfvlyv007r01qw4xauaoes',
-    center: [-118.3241, 34.0313],
-    zoom: 17,
-    pitch: 60,
-    bearing: -20,
-    antialias: true
+map.on('style.load', () => {
+  map.addSource('mapbox-dem', {
+    type: 'raster-dem',
+    url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+    tileSize: 512,
+    maxzoom: 14
   });
+  map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
 
-  // Terreno
-  map.on('style.load', () => {
-    map.addSource('mapbox-dem', {
-      type: 'raster-dem',
-      url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
-      tileSize: 512,
-      maxzoom: 14
-    });
-    map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
-  });
+  // camada customizada para GLB
+  const customLayer = {
+    id: '3d-model-upload',
+    type: 'custom',
+    renderingMode: '3d',
+    onAdd: function(map, gl) {
+      this.camera = new THREE.Camera();
+      this.scene = new THREE.Scene();
+      this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
+      this.renderer.autoClear = false;
 
-  // Importar GLB
-  document.getElementById('fileInput').addEventListener('change', (event) => {
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(0, -70, 100).normalize();
+      this.scene.add(light);
+
+      this.model = null;
+
+      // Controle de arrasto
+      this.dragging = false;
+      map.getCanvas().addEventListener('mousedown', () => { this.dragging = true; });
+      map.getCanvas().addEventListener('mouseup', () => { this.dragging = false; });
+      map.getCanvas().addEventListener('mousemove', (e) => {
+        if(this.dragging && this.model) {
+          const rect = map.getCanvas().getBoundingClientRect();
+          const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+          const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+          this.model.position.x += x * 5;
+          this.model.position.y += y * 5;
+        }
+      });
+      // Toque no celular
+      map.getCanvas().addEventListener('touchstart', () => { this.dragging = true; });
+      map.getCanvas().addEventListener('touchend', () => { this.dragging = false; });
+      map.getCanvas().addEventListener('touchmove', (e) => {
+        if(this.dragging && this.model) {
+          const touch = e.touches[0];
+          const rect = map.getCanvas().getBoundingClientRect();
+          const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+          const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+          this.model.position.x += x * 5;
+          this.model.position.y += y * 5;
+        }
+      });
+    },
+    render: function(gl, matrix) {
+      const m = new THREE.Matrix4().fromArray(matrix);
+      this.camera.projectionMatrix = m;
+      this.renderer.state.reset();
+      if(this.model) this.renderer.render(this.scene, this.camera);
+    }
+  };
+
+  map.addLayer(customLayer, 'waterway-label');
+
+  // Upload GLB
+  const fileInput = document.getElementById('fileInput');
+  fileInput.addEventListener('change', function(event) {
     const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      glbData = e.target.result;
-      alert("✅ Modelo carregado! Clique no mapa para posicionar.");
-    };
-    reader.readAsArrayBuffer(file);
+    if(!file) return;
+    const url = URL.createObjectURL(file);
+    const loader = new THREE.GLTFLoader();
+    loader.load(url, (gltf) => {
+      if(customLayer.model) customLayer.scene.remove(customLayer.model);
+      customLayer.model = gltf.scene;
+      const scaleSlider = document.getElementById('scaleSlider');
+      const scale = scaleSlider.value / 50;
+      customLayer.model.scale.set(scale*50, scale*50, scale*50);
+      customLayer.model.position.set(0,0,0);
+      customLayer.scene.add(customLayer.model);
+    });
   });
 
-  // Posicionar no clique
-  map.on('click', (e) => {
-    if (!glbData) {
-      alert("⚠️ Primeiro carregue um arquivo GLB.");
-      return;
+  // Controle de escala
+  const scaleSlider = document.getElementById('scaleSlider');
+  scaleSlider.addEventListener('input', () => {
+    if(customLayer.model) {
+      const scale = scaleSlider.value / 50;
+      customLayer.model.scale.set(scale*50, scale*50, scale*50);
     }
-
-    if (customLayer) {
-      map.removeLayer('3d-model');
-    }
-
-    const coord = mapboxgl.MercatorCoordinate.fromLngLat([e.lngLat.lng, e.lngLat.lat], 0);
-
-    modelTransform = {
-      translateX: coord.x,
-      translateY: coord.y,
-      translateZ: coord.z,
-      rotateX: Math.PI / 2,
-      rotateY: 0,
-      rotateZ: 0,
-      scale: coord.meterInMercatorCoordinateUnits() * 50
-    };
-
-    customLayer = {
-      id: '3d-model',
-      type: 'custom',
-      renderingMode: '3d',
-      onAdd: function (map, gl) {
-        this.camera = new THREE.Camera();
-        this.scene = new THREE.Scene();
-
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(0, -70, 100).normalize();
-        this.scene.add(light);
-
-        const loader = new THREE.GLTFLoader();
-        loader.parse(glbData, '', (gltf) => {
-          gltfScene = gltf.scene;
-          this.scene.add(gltfScene);
-          gltfScene.scale.set(50, 50, 50);
-        });
-
-        this.renderer = new THREE.WebGLRenderer({
-          canvas: map.getCanvas(),
-          context: gl,
-          antialias: true
-        });
-        this.renderer.autoClear = false;
-      },
-      render: function (gl, matrix) {
-        if (!gltfScene) return;
-
-        const m = new THREE.Matrix4().fromArray(matrix);
-        const l = new THREE.Matrix4()
-          .makeTranslation(modelTransform.translateX, modelTransform.translateY, modelTransform.translateZ)
-          .scale(new THREE.Vector3(modelTransform.scale, -modelTransform.scale, modelTransform.scale))
-          .multiply(new THREE.Matrix4().makeRotationX(modelTransform.rotateX))
-          .multiply(new THREE.Matrix4().makeRotationY(modelTransform.rotateY))
-          .multiply(new THREE.Matrix4().makeRotationZ(modelTransform.rotateZ));
-
-        this.camera.projectionMatrix = m.multiply(l);
-        this.renderer.state.reset();
-        this.renderer.render(this.scene, this.camera);
-      }
-    };
-
-    map.addLayer(customLayer, 'waterway-label');
-    document.getElementById('controls').style.display = 'block';
   });
-
-  // 🎚 Controles de edição
-  function updateTransform() {
-    if (!modelTransform) return;
-    const posX = parseFloat(document.getElementById('posX').value);
-    const posY = parseFloat(document.getElementById('posY').value);
-    const posZ = parseFloat(document.getElementById('posZ').value);
-    const rotZ = parseFloat(document.getElementById('rotZ').value) * Math.PI / 180;
-    const scale = parseFloat(document.getElementById('scale').value);
-
-    modelTransform.translateX += posX / 100000; // ajuste fino
-    modelTransform.translateY += posY / 100000;
-    modelTransform.translateZ += posZ / 100000;
-    modelTransform.rotateZ = rotZ;
-    modelTransform.scale = mapboxgl.MercatorCoordinate.fromLngLat(map.getCenter(), 0).meterInMercatorCoordinateUnits() * scale;
-
-    // reset sliders de posição (para não acumular infinitamente)
-    document.getElementById('posX').value = 0;
-    document.getElementById('posY').value = 0;
-    document.getElementById('posZ').value = 0;
-  }
-
-  ['posX','posY','posZ','rotZ','scale'].forEach(id => {
-    document.getElementById(id).addEventListener('input', updateTransform);
-  });
+});
 </script>
 </body>
 </html>
-ader -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-</body>
-</html>
-
