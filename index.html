@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Mapa 3D Los Angeles com Tráfego e Orbit Press</title>
+<title>Mapa 3D Los Angeles com Tráfego, Clima e Orbit Press</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 
 <!-- Mapbox GL JS -->
@@ -55,8 +55,19 @@ const map = new mapboxgl.Map({
 map.addControl(new mapboxgl.NavigationControl({ showCompass:true, showZoom:true }), 'top-right');
 map.touchZoomRotate.enableRotation();
 
-// Camada de tráfego
+// Relevo real e tráfego
 map.on('load', () => {
+
+  // Relevo real
+  map.addSource('mapbox-dem', {
+    type: 'raster-dem',
+    url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+    tileSize: 512,
+    maxzoom: 14
+  });
+  map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
+
+  // Tráfego
   map.addSource('traffic', {
     type: 'vector',
     url: 'mapbox://mapbox.mapbox-traffic-v1'
@@ -81,70 +92,12 @@ map.on('load', () => {
       'line-width': 3
     }
   });
-});
 
-// Botão Atualizar
-document.getElementById("btnRefresh").addEventListener("click", () => {
-  map.setCenter([-118.3241, 34.0313]);
-  map.setZoom(14);
-  map.setPitch(60);
-  map.setBearing(-17.6);
-});
-
-// ===== Orbit com pressionamento e arraste =====
-let orbitActive = false;
-let lastMouse = null;
-
-const orbitButton = document.getElementById("btnOrbit");
-
-function startOrbit(e){
-  orbitActive = true;
-  if(e.type.startsWith('touch')){
-    lastMouse = e.touches[0];
-  } else {
-    lastMouse = e;
-  }
-}
-
-function stopOrbit(){
-  orbitActive = false;
-  lastMouse = null;
-}
-
-function moveCamera(e){
-  if(!orbitActive) return;
-
-  let currentMouse;
-  if(e.type.startsWith('touch')){
-    currentMouse = e.touches[0];
-  } else {
-    currentMouse = e;
-  }
-
-  const deltaX = currentMouse.clientX - lastMouse.clientX;
-  const deltaY = currentMouse.clientY - lastMouse.clientY;
-
-  // Ajuste da câmera
-  const bearing = map.getBearing() + deltaX * 0.1; // rotação horizontal
-  let pitch = map.getPitch() - deltaY * 0.1;      // inclinação vertical
-  pitch = Math.max(0, Math.min(85, pitch));       // limita o pitch para 0-85°
-
-  map.setBearing(bearing);
-  map.setPitch(pitch);
-
-  lastMouse = currentMouse;
-}
-
-// Eventos do botão
-orbitButton.addEventListener('mousedown', startOrbit);
-orbitButton.addEventListener('touchstart', startOrbit);
-
-document.addEventListener('mouseup', stopOrbit);
-document.addEventListener('touchend', stopOrbit);
-
-document.addEventListener('mousemove', moveCamera);
-document.addEventListener('touchmove', moveCamera);
-</script>
-
-</body>
-</html>
+  // Clima (camada de nuvens) via OpenWeatherMap
+  map.addLayer({
+    id: 'clouds',
+    type: 'raster',
+    source: {
+      type: 'raster',
+      tiles: [
+        'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=049661e65f
